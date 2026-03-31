@@ -1,0 +1,38 @@
+services:
+  app:
+    build:
+      context: ./docker/php
+    container_name: wb_app
+    working_dir: /var/www
+    volumes:
+    - ./:/var/www
+    depends_on:
+    - db
+
+  web:
+    image: nginx:alpine
+    container_name: wb_web
+    ports:
+    - "8080:80"
+    volumes:
+    - ./:/var/www
+    - ./docker/nginx/default.conf:/etc/nginx/conf.d/default.conf
+    depends_on:
+    - app
+
+  db:
+    image: mysql:8.0
+    container_name: wb_db
+    restart: unless-stopped
+    environment:
+      MYSQL_DATABASE: wb_import
+      MYSQL_ROOT_PASSWORD: root
+      MYSQL_USER: root
+      MYSQL_PASSWORD: root
+    ports:
+    - "3307:3306"
+    volumes:
+    - wb_db_data:/var/lib/mysql
+
+volumes:
+  wb_db_data:
