@@ -30,4 +30,11 @@ return [
         'region' => env('AWS_DEFAULT_REGION', 'us-east-1'),
     ],
 
+    'wb_api' => [
+        'base_url' => env('WB_API_BASE_URL'),
+        'key' => env('WB_API_KEY'),
+        'timeout' => env('WB_API_TIMEOUT', 30),
+        'limit' => env('WB_API_LIMIT', 500),
+        'sleep_ms' => env('WB_API_SLEEP_MS', 1500),
+    ],
 ];

@@ -26,9 +26,9 @@ services:
     restart: unless-stopped
     environment:
       MYSQL_DATABASE: wb_import
-      MYSQL_ROOT_PASSWORD: root
-      MYSQL_USER: root
-      MYSQL_PASSWORD: root
+      MYSQL_ROOT_PASSWORD: wb_import
+      MYSQL_USER: wb_import
+      MYSQL_PASSWORD: wb_import
     ports:
     - "3307:3306"
     volumes:
