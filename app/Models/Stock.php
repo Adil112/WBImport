@@ -4,11 +4,13 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 class Stock extends Model
 {
     use HasFactory;
     protected $fillable = [
+        'account_id',
         'record_hash',
         'stock_date',
         'last_change_date',
@@ -48,4 +50,9 @@ class Stock extends Model
         'is_supply' => 'boolean',
         'is_realization' => 'boolean',
     ];
+
+    public function account(): BelongsTo
+    {
+        return $this->belongsTo(Account::class);
+    }
 }

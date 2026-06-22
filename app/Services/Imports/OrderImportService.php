@@ -19,7 +19,7 @@ class OrderImportService extends AbstractImportService
 
     protected function fetchPage(string $dateFrom, string $dateTo, int $page, int $limit): array
     {
-        return $this->client->getSales($dateFrom, $dateTo, $limit, $page);
+        return $this->client->getOrders($dateFrom, $dateTo, $limit, $page);
     }
 
     protected function normalize(array $item): array

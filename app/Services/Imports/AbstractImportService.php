@@ -2,12 +2,13 @@
 
 namespace App\Services\Imports;
 
+use App\Models\Account;
 use Illuminate\Database\Eloquent\Model;
 use RuntimeException;
 
 abstract class AbstractImportService
 {
-    public function import(string $dateFrom, string $dateTo, ?int $limit = null): array
+    public function import(Account $account, string $dateFrom, string $dateTo, ?int $limit = null): array
     {
         $page = 1;
         $lastPage = 1;
@@ -39,8 +40,12 @@ abstract class AbstractImportService
 
                 /** @var Model $model */
                 $model = $this->getModelClass()::updateOrCreate(
-                    ['record_hash' => $recordHash],
+                    [
+                        'account_id' => $account->id,
+                        'record_hash' => $recordHash,
+                    ],
                     array_merge($normalized, [
+                        'account_id' => $account->id,
                         'record_hash' => $recordHash,
                     ])
                 );

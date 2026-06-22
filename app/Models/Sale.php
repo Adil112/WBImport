@@ -4,12 +4,14 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 class Sale extends Model
 {
     use HasFactory;
 
     protected $fillable = [
+        'account_id',
         'record_hash',
         'g_number',
         'sale_date',
@@ -59,4 +61,9 @@ class Sale extends Model
         'is_realization' => 'boolean',
         'is_storno' => 'boolean',
     ];
+
+    public function account(): BelongsTo
+    {
+        return $this->belongsTo(Account::class);
+    }
 }
