@@ -16,6 +16,7 @@ class ApiToken extends Model
         'token_type_id',
         'credentials',
         'is_active',
+        'is_default',
         'expires_at',
         'last_used_at',
     ];
@@ -23,6 +24,7 @@ class ApiToken extends Model
     protected $casts = [
         'credentials' => 'encrypted:array',
         'is_active' => 'boolean',
+        'is_default' => 'boolean',
         'expires_at' => 'datetime',
         'last_used_at' => 'datetime',
     ];

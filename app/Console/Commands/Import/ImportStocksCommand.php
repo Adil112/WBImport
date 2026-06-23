@@ -5,8 +5,6 @@ namespace App\Console\Commands\Import;
 use App\Models\Account;
 use App\Services\Imports\ImportLogger;
 use App\Services\Imports\StockImportService;
-use Illuminate\Console\Command;
-use Throwable;
 
 class ImportStocksCommand extends BaseImportCommand
 {
@@ -17,7 +15,7 @@ class ImportStocksCommand extends BaseImportCommand
 
     protected $description = 'Импорт остатков';
 
-    public function __construct(private StockImportService $service, ImportLogger $importLogger)
+    public function __construct(private readonly StockImportService $service, ImportLogger $importLogger)
     {
         parent::__construct($importLogger);
     }
@@ -27,17 +25,8 @@ class ImportStocksCommand extends BaseImportCommand
         return $this->runImport(
             importType: 'stocks',
             importName: 'остатки',
-            import: fn (
-                Account $account,
-                string $dateFrom,
-                ?string $dateTo,
-                int $limit,
-            ): array => $this->service->import(
-                $account,
-                $dateFrom,
-                '',
-                $limit,
-            ),
+            import: fn (Account $account, string $dateFrom, ?string $dateTo, int $limit, callable $onEvent):
+            array => $this->service->import($account, $dateFrom, '', $limit, $onEvent),
             usesDateTo: false,
         );
     }

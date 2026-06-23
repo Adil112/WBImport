@@ -34,7 +34,7 @@ abstract class BaseImportCommand extends Command
                 limit: $limit,
             );
 
-            $result = $import($account, $dateFrom, $dateTo, $limit);
+            $result = $import($account, $dateFrom, $dateTo, $limit, $this->createImportEventHandler());
 
             $this->importLogger->success($log, $result);
             $this->displayResult($result);
@@ -61,7 +61,6 @@ abstract class BaseImportCommand extends Command
                 ['Лимит запроса', $limit],
             ],
         );
-        $this->line('Получение данных...');
     }
 
     private function displayResult(array $result): void
@@ -77,6 +76,64 @@ abstract class BaseImportCommand extends Command
                 ['Без изменений', $result['unchanged']],
                 ['Последняя страница', $result['last_page']],
             ],
+        );
+    }
+
+    private function createImportEventHandler(): callable
+    {
+        return function (array $event): void {
+            $type = $event['type'] ?? null;
+
+            match ($type) {
+                'page_started' => $this->displayPageStarted($event),
+                'page_received' => $this->displayPageReceived($event),
+                'page_processed' => $this->displayPageProcessed($event),
+                'retry' => $this->displayRetry($event),
+                default => null,
+            };
+        };
+    }
+
+    private function displayPageStarted(array $event): void
+    {
+        $this->newLine();
+        $this->line(
+            "Запрашивается страница {$event['page']}..."
+        );
+    }
+
+    private function displayPageReceived(array $event): void
+    {
+        $this->line(
+            "Страница {$event['page']} получена: "
+            . "{$event['items_count']} записей. "
+            . "Всего страниц: {$event['last_page']}."
+        );
+    }
+
+    private function displayPageProcessed(array $event): void
+    {
+        $this->line(
+            "Страница {$event['page']} обработана: "
+            . "создано {$event['created']}, "
+            . "обновлено {$event['updated']}, "
+            . "без изменений {$event['unchanged']}."
+        );
+    }
+
+    private function displayRetry(array $event): void
+    {
+        $delaySeconds = ((int) $event['delay_ms']) / 1000;
+        $this->warn('Получен ответ 429 Too Many Requests.');
+        $this->line(
+            "Повторная попытка {$event['attempt']} "
+            . "из {$event['max_attempts']} "
+            . "через {$delaySeconds} сек."
+        );
+        $this->line(
+            "Endpoint: {$event['endpoint']}; "
+            . "аккаунт ID: {$event['account_id']}; "
+            . "токен ID: {$event['token_id']}."
         );
     }
 }

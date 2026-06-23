@@ -31,10 +31,14 @@ return [
     ],
 
     'wb_api' => [
+        'service_slug' => env('WB_API_SERVICE_SLUG', 'wb-test'),
         'base_url' => env('WB_API_BASE_URL'),
         'key' => env('WB_API_KEY'),
         'timeout' => env('WB_API_TIMEOUT', 30),
         'limit' => env('WB_API_LIMIT', 500),
         'sleep_ms' => env('WB_API_SLEEP_MS', 1500),
+
+        'retry_times' => env('WB_API_RETRY_TIMES', 5),
+        'retry_delay_ms' => env('WB_API_RETRY_DELAY_MS', 2000),
     ],
 ];

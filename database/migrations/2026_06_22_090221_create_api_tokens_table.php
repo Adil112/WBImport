@@ -25,6 +25,7 @@ class CreateApiTokensTable extends Migration
 
             $table->text('credentials');
             $table->boolean('is_active')->default(true);
+            $table->boolean('is_default')->default(false);
             $table->timestamp('last_used_at')->nullable();
             $table->timestamp('expires_at')->nullable();
             $table->timestamps();

@@ -3,13 +3,22 @@
 namespace App\Services\Imports;
 
 use App\Models\Account;
+use App\Models\ApiService;
+use App\Models\ApiToken;
+use App\Services\ApiTokenResolver;
 use Illuminate\Database\Eloquent\Model;
 use RuntimeException;
 
 abstract class AbstractImportService
 {
-    public function import(Account $account, string $dateFrom, string $dateTo, ?int $limit = null): array
+    public function __construct(protected readonly ApiTokenResolver $tokenResolver) {
+
+    }
+    public function import(Account $account, string $dateFrom, string $dateTo, ?int $limit = null, ?callable $onEvent = null): array
     {
+        $apiService = $this->resolveApiService();
+        $apiToken = $this->tokenResolver->resolve($account, $apiService,);
+
         $page = 1;
         $lastPage = 1;
         $processed = 0;
@@ -19,7 +28,11 @@ abstract class AbstractImportService
         $limit = $limit ?? config('services.wb_api.limit');
 
         do {
-            $response = $this->fetchPage($dateFrom, $dateTo, $page, $limit);
+            $this->dispatchEvent($onEvent, [
+                'type' => 'page_started',
+                'page' => $page,
+            ]);
+            $response = $this->fetchPage($apiToken, $dateFrom, $dateTo, $page, $limit, $onEvent);
 
             $items = $response['data'] ?? null;
             $meta = $response['meta'] ?? [];
@@ -29,6 +42,17 @@ abstract class AbstractImportService
             }
 
             $lastPage = (int) ($meta['last_page'] ?? 1);
+
+            $this->dispatchEvent($onEvent, [
+                'type' => 'page_received',
+                'page' => $page,
+                'last_page' => $lastPage,
+                'items_count' => count($items),
+            ]);
+
+            $pageCreated = 0;
+            $pageUpdated = 0;
+            $pageUnchanged = 0;
 
             foreach ($items as $item) {
                 if (! is_array($item)) {
@@ -54,12 +78,23 @@ abstract class AbstractImportService
 
                 if ($model->wasRecentlyCreated) {
                     $created++;
+                    $pageCreated++;
                 } elseif ($model->wasChanged()) {
                     $updated++;
+                    $pageUpdated++;
                 } else {
                     $unchanged++;
+                    $pageUnchanged++;
                 }
             }
+
+            $this->dispatchEvent($onEvent, [
+                'type' => 'page_processed',
+                'page' => $page,
+                'created' => $pageCreated,
+                'updated' => $pageUpdated,
+                'unchanged' => $pageUnchanged,
+            ]);
 
             $page++;
 
@@ -76,8 +111,31 @@ abstract class AbstractImportService
             'last_page' => $lastPage,
         ];
     }
+    private function resolveApiService(): ApiService
+    {
+        $slug = config('services.wb_api.service_slug');
+        if (!is_string($slug) || $slug === '') {
+            throw new RuntimeException('Не задан services.wb_api.service_slug.');
+        }
 
-    abstract protected function fetchPage(string $dateFrom, string $dateTo, int $page, int $limit): array;
+        $apiService = ApiService::query()
+            ->where('slug', $slug)
+            ->first();
+
+        if (!$apiService instanceof ApiService) {
+            throw new RuntimeException("API-сервис со slug «{$slug}» не найден.");
+        }
+
+        return $apiService;
+    }
+
+    private function dispatchEvent(?callable $onEvent, array $event): void
+    {
+        if ($onEvent !== null) {
+            $onEvent($event);
+        }
+    }
+    abstract protected function fetchPage(ApiToken $apiToken, string $dateFrom, string $dateTo, int $page, int $limit, ?callable $onEvent = null): array;
 
     abstract protected function normalize(array $item): array;
 

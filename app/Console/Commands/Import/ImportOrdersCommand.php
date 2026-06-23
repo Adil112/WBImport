@@ -5,8 +5,6 @@ namespace App\Console\Commands\Import;
 use App\Models\Account;
 use App\Services\Imports\ImportLogger;
 use App\Services\Imports\OrderImportService;
-use Illuminate\Console\Command;
-use Throwable;
 
 class ImportOrdersCommand extends BaseImportCommand
 {
@@ -18,7 +16,7 @@ class ImportOrdersCommand extends BaseImportCommand
 
     protected $description = 'Импорт заказов';
 
-    public function __construct(private OrderImportService $service, ImportLogger $importLogger)
+    public function __construct(private readonly OrderImportService $service, ImportLogger $importLogger)
     {
         parent::__construct($importLogger);
     }
@@ -28,17 +26,8 @@ class ImportOrdersCommand extends BaseImportCommand
         return $this->runImport(
             importType: 'orders',
             importName: 'заказы',
-            import: fn (
-                Account $account,
-                string $dateFrom,
-                ?string $dateTo,
-                int $limit,
-            ): array => $this->service->import(
-                $account,
-                $dateFrom,
-                $dateTo,
-                $limit,
-            ),
+            import: fn (Account $account, string $dateFrom, ?string $dateTo, int $limit, callable $onEvent):
+            array => $this->service->import($account, $dateFrom, $dateTo, $limit, $onEvent),
         );
     }
 }

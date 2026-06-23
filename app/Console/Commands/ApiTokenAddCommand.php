@@ -9,6 +9,7 @@ use App\Models\TokenType;
 use Carbon\Carbon;
 use Illuminate\Console\Command;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\DB;
 
 class ApiTokenAddCommand extends Command
 {
@@ -17,6 +18,7 @@ class ApiTokenAddCommand extends Command
                             {--service= : ID или slug API-сервиса}
                             {--token-type= : ID или slug типа токена}
                             {--inactive : Создать токен неактивным}
+                            {--default : Назначить токен основным для аккаунта и API-сервиса}
                             {--expires-at= : Дата окончания действия токена}';
 
     protected $description = 'Добавить API-токен для аккаунта';
@@ -91,15 +93,50 @@ class ApiTokenAddCommand extends Command
             return self::FAILURE;
         }
 
-        $apiToken = ApiToken::query()->create([
-            'account_id' => $account->id,
-            'api_service_id' => $apiService->id,
-            'token_type_id' => $tokenType->id,
-            'credentials' => $credentials,
-            'is_active' => !$this->option('inactive'),
-            'expires_at' => $expiresAt,
-            'last_used_at' => null,
-        ]);
+        $isActive = !$this->option('inactive');
+        $hasDefaultToken = ApiToken::query()
+            ->where('account_id', $account->id)
+            ->where('api_service_id', $apiService->id)
+            ->where('is_default', true)
+            ->exists();
+
+        $isDefault = (bool) $this->option('default') || ($isActive && !$hasDefaultToken);
+
+        if ($isDefault && !$isActive) {
+            $this->error('Нельзя назначить неактивный токен основным.');
+            return self::FAILURE;
+        }
+
+        $apiToken = DB::transaction(function () use (
+            $account,
+            $apiService,
+            $tokenType,
+            $credentials,
+            $expiresAt,
+            $isActive,
+            $isDefault
+        ): ApiToken {
+            if ($isDefault) {
+                ApiToken::query()
+                    ->where('account_id', $account->id)
+                    ->where('api_service_id', $apiService->id)
+                    ->where('is_default', true)
+                    ->update([
+                        'is_default' => false,
+                    ]);
+            }
+
+            return ApiToken::query()->create([
+                'account_id' => $account->id,
+                'api_service_id' => $apiService->id,
+                'token_type_id' => $tokenType->id,
+                'credentials' => $credentials,
+                'is_active' => $isActive,
+                'is_default' => $isDefault,
+                'expires_at' => $expiresAt,
+                'last_used_at' => null,
+            ]);
+        });
         $this->newLine();
         $this->info('API-токен успешно добавлен.');
         $this->line("ID: {$apiToken->id}");
@@ -108,6 +145,7 @@ class ApiTokenAddCommand extends Command
         $this->line("API-сервис: {$apiService->name}");
         $this->line("Тип токена: {$tokenType->name}");
         $this->line('Статус: ' . ($apiToken->is_active ? 'активен' : 'неактивен'));
+        $this->line('Основной: ' . ($apiToken->is_default ? 'да' : 'нет'));
         $this->line('Истекает: ' . ($apiToken->expires_at?->format('Y-m-d H:i:s') ?? 'не указано'));
 
         return self::SUCCESS;
@@ -288,10 +326,23 @@ class ApiTokenAddCommand extends Command
             'Название query-параметра',
             'key'
         );
-        $value = $this->secret('Введите значение ключа');
-        if (!$value) {
-            $this->error('Значение ключа не может быть пустым.');
-            return null;
+        $useConfigKey = $this->confirm(
+            'Использовать тестовый API-ключ из конфигурации?',
+            true
+        );
+
+        if ($useConfigKey) {
+            $value = config('services.wb_api.key');
+            if (!is_string($value) || $value === '') {
+                $this->error('API-ключ не задан в services.wb_api.key.');
+                return null;
+            }
+        } else {
+            $value = $this->secret('Введите значение ключа');
+            if (!is_string($value) || $value === '') {
+                $this->error('Значение ключа не может быть пустым.');
+                return null;
+            }
         }
         return [
             'parameter' => $parameter,
