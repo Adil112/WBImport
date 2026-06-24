@@ -2,11 +2,14 @@
 
 namespace App\Services\Imports;
 
+use App\Exceptions\SkipRecordException;
 use App\Models\Account;
 use App\Models\ApiService;
 use App\Models\ApiToken;
 use App\Services\ApiTokenResolver;
+use Carbon\Carbon;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Support\Facades\Log;
 use RuntimeException;
 
 abstract class AbstractImportService
@@ -14,8 +17,21 @@ abstract class AbstractImportService
     public function __construct(protected readonly ApiTokenResolver $tokenResolver) {
 
     }
-    public function import(Account $account, string $dateFrom, string $dateTo, ?int $limit = null, ?callable $onEvent = null): array
+    public function import(Account $account, ?string $dateFrom, ?string $dateTo, ?int $limit = null, ?callable $onEvent = null): array
     {
+        $range = $this->resolveDateRange($account, $dateFrom, $dateTo);
+        $dateFrom = $range['date_from'];
+        $dateTo = $range['date_to'];
+
+        $this->dispatchEvent($onEvent, [
+            'type' => 'date_range_resolved',
+            'requested_date_from' => $range['requested_date_from'],
+            'requested_date_to' => $range['requested_date_to'],
+            'last_stored_date' => $range['last_stored_date'],
+            'date_from' => $dateFrom,
+            'date_to' => $dateTo,
+        ]);
+
         $apiService = $this->resolveApiService();
         $apiToken = $this->tokenResolver->resolve($account, $apiService,);
 
@@ -25,7 +41,9 @@ abstract class AbstractImportService
         $created = 0;
         $updated = 0;
         $unchanged = 0;
+        $skipped = 0;
         $limit = $limit ?? config('services.wb_api.limit');
+        $importedRecordHashes = [];
 
         do {
             $this->dispatchEvent($onEvent, [
@@ -58,9 +76,16 @@ abstract class AbstractImportService
                 if (! is_array($item)) {
                     continue;
                 }
+                try {
+                    $normalized = $this->normalize($item);
+                    $recordHash = $this->makeHash($normalized);
+                } catch (SkipRecordException $e) {
+                    $skipped++;
+                    Log::warning($e->getMessage(), ['item' => $item,]);
+                    continue;
+                }
 
-                $normalized = $this->normalize($item);
-                $recordHash = $this->makeHash($normalized);
+                $importedRecordHashes[] = $recordHash;
 
                 /** @var Model $model */
                 $model = $this->getModelClass()::updateOrCreate(
@@ -103,12 +128,19 @@ abstract class AbstractImportService
             }
         } while ($page <= $lastPage);
 
+        $finalizationResult = $this->finalizeImport($account, array_values(array_unique($importedRecordHashes)),);
+
         return [
             'processed' => $processed,
             'created' => $created,
             'updated' => $updated,
             'unchanged' => $unchanged,
+            'skipped' => $skipped,
+            'deleted' => $finalizationResult['deleted'] ?? 0,
             'last_page' => $lastPage,
+            'date_from' => $dateFrom,
+            'date_to' => $dateTo,
+            'last_stored_date' => $range['last_stored_date'],
         ];
     }
     private function resolveApiService(): ApiService
@@ -135,6 +167,64 @@ abstract class AbstractImportService
             $onEvent($event);
         }
     }
+
+    private function resolveDateRange(Account $account, ?string $requestedDateFrom, ?string $requestedDateTo): array
+    {
+        $requestedDateFrom = $this->normalizeDate($requestedDateFrom);
+        $requestedDateTo = $this->normalizeDate($requestedDateTo);
+
+        $lastStoredDate = $this->getModelClass()::query()
+            ->where('account_id', $account->id)
+            ->whereNotNull($this->getDateColumn())
+            ->max($this->getDateColumn());
+
+        $lastStoredDate = $lastStoredDate !== null ? Carbon::parse($lastStoredDate)->toDateString() : null;
+        $defaultDateFrom = config('services.wb_api.default_date_from');
+
+        $dateFrom = match (true) {
+            $requestedDateFrom !== null && $lastStoredDate !== null => max($requestedDateFrom, $lastStoredDate),
+            $requestedDateFrom !== null => $requestedDateFrom,
+            $lastStoredDate !== null => $lastStoredDate,
+            default => Carbon::parse($defaultDateFrom)->toDateString(),
+        };
+
+        $dateTo = $requestedDateTo ?? now()->toDateString();
+
+        if ($dateFrom > $dateTo) {
+            throw new RuntimeException("Дата начала {$dateFrom} не может быть позже даты окончания {$dateTo}.");
+        }
+
+        return [
+            'requested_date_from' => $requestedDateFrom,
+            'requested_date_to' => $requestedDateTo,
+            'last_stored_date' => $lastStoredDate,
+            'date_from' => $dateFrom,
+            'date_to' => $dateTo,
+        ];
+    }
+
+    private function normalizeDate(?string $date): ?string
+    {
+        if ($date === null || trim($date) === '') {
+            return null;
+        }
+
+        try {
+            return Carbon::createFromFormat(
+                'Y-m-d',
+                $date,
+            )->toDateString();
+        } catch (\Throwable) {
+            throw new RuntimeException(
+                "Дата «{$date}» должна быть в формате Y-m-d."
+            );
+        }
+    }
+
+    protected function finalizeImport(Account $account, array $importedRecordHashes): array
+    {
+        return ['deleted' => 0];
+    }
     abstract protected function fetchPage(ApiToken $apiToken, string $dateFrom, string $dateTo, int $page, int $limit, ?callable $onEvent = null): array;
 
     abstract protected function normalize(array $item): array;
@@ -142,4 +232,6 @@ abstract class AbstractImportService
     abstract protected function makeHash(array $normalized): string;
 
     abstract protected function getModelClass(): string;
+
+    abstract protected function getDateColumn(): string;
 }

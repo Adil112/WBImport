@@ -40,5 +40,7 @@ return [
 
         'retry_times' => env('WB_API_RETRY_TIMES', 5),
         'retry_delay_ms' => env('WB_API_RETRY_DELAY_MS', 2000),
+
+        'default_date_from' => env('WB_IMPORT_DEFAULT_DATE_FROM', '2026-06-15'),
     ],
 ];

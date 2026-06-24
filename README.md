@@ -1,64 +1,123 @@
-<p align="center"><a href="https://laravel.com" target="_blank"><img src="https://raw.githubusercontent.com/laravel/art/master/logo-lockup/5%20SVG/2%20CMYK/1%20Full%20Color/laravel-logolockup-cmyk-red.svg" width="400"></a></p>
+# WB Import Service
 
-<p align="center">
-<a href="https://travis-ci.org/laravel/framework"><img src="https://travis-ci.org/laravel/framework.svg" alt="Build Status"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/dt/laravel/framework" alt="Total Downloads"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/v/laravel/framework" alt="Latest Stable Version"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/l/laravel/framework" alt="License"></a>
-</p>
+> Сервис импорта данных из API Wildberries на Laravel
 
-## About Laravel
+---
 
-Laravel is a web application framework with expressive, elegant syntax. We believe development must be an enjoyable and creative experience to be truly fulfilling. Laravel takes the pain out of development by easing common tasks used in many web projects, such as:
+## Что умеет
 
-- [Simple, fast routing engine](https://laravel.com/docs/routing).
-- [Powerful dependency injection container](https://laravel.com/docs/container).
-- Multiple back-ends for [session](https://laravel.com/docs/session) and [cache](https://laravel.com/docs/cache) storage.
-- Expressive, intuitive [database ORM](https://laravel.com/docs/eloquent).
-- Database agnostic [schema migrations](https://laravel.com/docs/migrations).
-- [Robust background job processing](https://laravel.com/docs/queues).
-- [Real-time event broadcasting](https://laravel.com/docs/broadcasting).
+Загружает четыре типа данных из WB и сохраняет их в MySQL, привязывая к конкретному аккаунту:
 
-Laravel is accessible, powerful, and provides tools required for large, robust applications.
+| Тип | Описание |
+|-----|----------|
+| `incomes` | Доходы |
+| `orders` | Заказы |
+| `sales` | Продажи |
+| `stocks` | Остатки |
 
-## Learning Laravel
+---
 
-Laravel has the most extensive and thorough [documentation](https://laravel.com/docs) and video tutorial library of all modern web application frameworks, making it a breeze to get started with the framework.
+## Архитектура
 
-If you don't feel like reading, [Laracasts](https://laracasts.com) can help. Laracasts contains over 1500 video tutorials on a range of topics including Laravel, modern PHP, unit testing, and JavaScript. Boost your skills by digging into our comprehensive video library.
+Проект построен вокруг единого механизма импорта. Общая логика — пагинация, обновление, обработка ошибок, статистика, логирование — вынесена в базовый сервис. Для каждого типа данных реализованы только три специфичные вещи:
 
-## Laravel Sponsors
+```
+Тип данных
+ ├── Сервис импорта
+ ├── Нормализатор входящих данных
+ └── Стратегия формирования record_hash
+```
 
-We would like to extend our thanks to the following sponsors for funding Laravel development. If you are interested in becoming a sponsor, please visit the Laravel [Patreon page](https://patreon.com/taylorotwell).
+Это позволяет подключать новые сущности без дублирования кода.
 
-### Premium Partners
+---
 
-- **[Vehikl](https://vehikl.com/)**
-- **[Tighten Co.](https://tighten.co)**
-- **[Kirschbaum Development Group](https://kirschbaumdevelopment.com)**
-- **[64 Robots](https://64robots.com)**
-- **[Cubet Techno Labs](https://cubettech.com)**
-- **[Cyber-Duck](https://cyber-duck.co.uk)**
-- **[Many](https://www.many.co.uk)**
-- **[Webdock, Fast VPS Hosting](https://www.webdock.io/en)**
-- **[DevSquad](https://devsquad.com)**
-- **[Curotec](https://www.curotec.com/services/technologies/laravel/)**
-- **[OP.GG](https://op.gg)**
-- **[WebReinvent](https://webreinvent.com/?utm_source=laravel&utm_medium=github&utm_campaign=patreon-sponsors)**
-- **[Lendio](https://lendio.com)**
+## Токены и интеграции
 
-## Contributing
+Структура хранения интеграций расширяема: поддерживаются несколько API-сервисов и типов авторизации.
 
-Thank you for considering contributing to the Laravel framework! The contribution guide can be found in the [Laravel documentation](https://laravel.com/docs/contributions).
+**Поддерживаемые типы токенов:**
+- `query-key`
+- `bearer`
+- `api-key`
+- `login-password`
 
-## Code of Conduct
+В текущей реализации используется один API-сервис WB с авторизацией через query-параметр `key`.
 
-In order to ensure that the Laravel community is welcoming to all, please review and abide by the [Code of Conduct](https://laravel.com/docs/contributions#code-of-conduct).
+### Токен по умолчанию
 
-## Security Vulnerabilities
+У каждого аккаунта есть возможность назначить токен по умолчанию (`is_default`). При запуске импорта система автоматически подхватывает активный токен — менять код не нужно.
 
-If you discover a security vulnerability within Laravel, please send an e-mail to Taylor Otwell via [taylor@laravel.com](mailto:taylor@laravel.com). All security vulnerabilities will be promptly addressed.
+Для каждого токена хранится:
 
-## License
+| Поле | Описание |
+|------|----------|
+| `expires_at` | Дата истечения |
+| `last_used_at` | Последнее использование |
+| `is_active` | Статус активности |
 
-The Laravel framework is open-sourced software licensed under the [MIT license](https://opensource.org/licenses/MIT).
+Это позволяет спокойно ротировать токены и хранить несколько штук на один сервис.
+
+---
+
+## Изоляция данных
+
+Каждая импортированная запись содержит `account_id`. Уникальность определяется парой:
+
+```
+account_id + record_hash
+```
+
+Данные разных аккаунтов полностью изолированы — случайной перезаписи быть не может.
+
+---
+
+## Инкрементальный импорт
+
+Для сущностей с датой сервис запоминает дату последней успешно сохранённой записи. При повторном запуске импорт стартует с этой точки — не с начала. Меньше запросов к API, быстрее работа.
+
+---
+
+## Основные команды
+
+### Настройка
+
+| Команда | Описание |
+|---------|----------|
+| `php artisan company:add` | Создать компанию |
+| `php artisan account:add` | Создать аккаунт |
+| `php artisan api-service:add` | Создать API-сервис |
+| `php artisan token-type:add` | Создать тип токена |
+| `php artisan api-service:attach-token-type` | Привязать тип токена к сервису |
+| `php artisan api-token:add` | Добавить токен |
+| `php artisan api-token:set-default` | Назначить токен по умолчанию |
+
+### Импорт
+
+```bash
+# Отдельные сущности
+php artisan wb:import-incomes {account_id}
+php artisan wb:import-orders {account_id}
+php artisan wb:import-sales {account_id}
+php artisan wb:import-stocks {account_id}
+
+# Всё сразу
+php artisan wb:import-all
+```
+
+---
+
+## Логирование
+
+Каждый запуск фиксируется в таблице `import_logs`:
+
+| Поле | Описание |
+|------|----------|
+| `type` | Тип импорта |
+| `period` | Период загрузки |
+| `status` | Статус выполнения |
+| `processed` | Обработано записей |
+| `created` | Создано |
+| `updated` | Обновлено |
+| `skipped` | Пропущено |
+| `error` | Текст ошибки (при неуспехе) |

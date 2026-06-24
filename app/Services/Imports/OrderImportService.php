@@ -5,13 +5,12 @@ namespace App\Services\Imports;
 use App\Models\ApiToken;
 use App\Models\Order;
 use App\Services\ApiTokenResolver;
-use App\Services\Normalizers\IncomeNormalizer;
 use App\Services\Normalizers\OrderNormalizer;
 use App\Services\WbApiClient;
 
 class OrderImportService extends AbstractImportService
 {
-    public function __construct(ApiTokenResolver $tokenResolver, private readonly WbApiClient $client, private readonly IncomeNormalizer $normalizer) {
+    public function __construct(ApiTokenResolver $tokenResolver, private readonly WbApiClient $client, private readonly OrderNormalizer $normalizer) {
         parent::__construct($tokenResolver);
     }
 
@@ -33,5 +32,10 @@ class OrderImportService extends AbstractImportService
     protected function getModelClass(): string
     {
         return Order::class;
+    }
+
+    protected function getDateColumn(): string
+    {
+        return 'order_date';
     }
 }

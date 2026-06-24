@@ -2,6 +2,8 @@
 
 namespace App\Services\Normalizers;
 
+use App\Exceptions\SkipRecordException;
+
 class OrderNormalizer
 {
     use NormalizesValues;
@@ -30,8 +32,19 @@ class OrderNormalizer
         ];
     }
 
+    /**
+     * @throws SkipRecordException
+     */
     public function makeHash(array $normalized): string
     {
-        return $this->makeRecordHash($normalized);
+        if (empty($normalized['income_id'])) {
+            throw new SkipRecordException('Пропущен заказ: поле income_id отсутствует.');
+        }
+        return $this->makeRecordHash([
+            'income_id' => $normalized['income_id'],
+            'g_number' => $normalized['g_number'] ?? null,
+            'barcode' => $normalized['barcode'] ?? null,
+            'tech_size' => $normalized['tech_size'] ?? null,
+        ]);
     }
 }

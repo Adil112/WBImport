@@ -33,4 +33,9 @@ class IncomeImportService extends AbstractImportService
     {
         return Income::class;
     }
+
+    protected function getDateColumn(): string
+    {
+        return 'income_date';
+    }
 }

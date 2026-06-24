@@ -2,7 +2,7 @@
 
 namespace App\Services\Normalizers;
 
-use App\Services\Normalizers\NormalizesValues;
+use App\Exceptions\SkipRecordException;
 
 class IncomeNormalizer
 {
@@ -26,8 +26,19 @@ class IncomeNormalizer
         ];
     }
 
+    /**
+     * @throws SkipRecordException
+     */
     public function makeHash(array $normalized): string
     {
-        return $this->makeRecordHash($normalized);
+        if (empty($normalized['income_id'])) {
+            throw new SkipRecordException('Пропущена поставка: поле income_id отсутствует.');
+        }
+        return $this->makeRecordHash([
+            'income_id' => $normalized['income_id'],
+            'nm_id' => $normalized['nm_id'] ?? null,
+            'barcode' => $normalized['barcode'] ?? null,
+            'tech_size' => $normalized['tech_size'] ?? null,
+        ]);
     }
 }

@@ -10,8 +10,8 @@ class ImportIncomesCommand extends BaseImportCommand
 {
     protected $signature = 'wb:import-incomes
                             {account_id}
-                            {dateFrom : Start date in Y-m-d format}
-                            {dateTo : End date in Y-m-d format}
+                            {dateFrom? : Start date in Y-m-d format}
+                            {dateTo? : End date in Y-m-d format}
                             {--limit=500 : Items per page}';
 
     protected $description = 'Импорт доходов';
@@ -26,7 +26,7 @@ class ImportIncomesCommand extends BaseImportCommand
         return $this->runImport(
             importType: 'incomes',
             importName: 'доходы',
-            import: fn (Account $account, string $dateFrom, ?string $dateTo, int $limit, callable $onEvent):
+            import: fn (Account $account, ?string $dateFrom, ?string $dateTo, int $limit, callable $onEvent):
             array => $this->service->import($account, $dateFrom, $dateTo, $limit, $onEvent),
         );
     }

@@ -5,13 +5,12 @@ namespace App\Services\Imports;
 use App\Models\ApiToken;
 use App\Models\Sale;
 use App\Services\ApiTokenResolver;
-use App\Services\Normalizers\IncomeNormalizer;
 use App\Services\Normalizers\SaleNormalizer;
 use App\Services\WbApiClient;
 
 class SaleImportService extends AbstractImportService
 {
-    public function __construct(ApiTokenResolver $tokenResolver, private readonly WbApiClient $client, private readonly IncomeNormalizer $normalizer) {
+    public function __construct(ApiTokenResolver $tokenResolver, private readonly WbApiClient $client, private readonly SaleNormalizer $normalizer) {
         parent::__construct($tokenResolver);
     }
 
@@ -33,5 +32,10 @@ class SaleImportService extends AbstractImportService
     protected function getModelClass(): string
     {
         return Sale::class;
+    }
+
+    protected function getDateColumn(): string
+    {
+        return 'sale_date';
     }
 }

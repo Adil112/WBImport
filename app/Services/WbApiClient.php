@@ -51,12 +51,12 @@ class WbApiClient
         );
     }
 
-    public function getStocks(ApiToken $apiToken, string $dateFrom, int $limit, int $page = 1, ?callable $onEvent = null): array
+    public function getStocks(ApiToken $apiToken, int $limit, int $page = 1, ?callable $onEvent = null): array
     {
         return $this->get($apiToken,
             '/api/stocks',
             [
-                'dateFrom' => $dateFrom,
+                'dateFrom' => now()->toDateString(),
                 'page' => $page,
                 'limit' => $limit,
             ],

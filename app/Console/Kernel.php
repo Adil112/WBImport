@@ -15,7 +15,13 @@ class Kernel extends ConsoleKernel
      */
     protected function schedule(Schedule $schedule)
     {
-        // $schedule->command('inspire')->hourly();
+        $schedule
+            ->command('wb:import-all --limit=500')
+            ->twiceDaily(6, 18)
+            ->withoutOverlapping(120)
+            ->appendOutputTo(
+                storage_path('logs/scheduler-import.log')
+            );
     }
 
     /**

@@ -9,9 +9,7 @@ use App\Models\Company;
 use App\Models\TokenType;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Http;
-use Symfony\Component\Console\Output\BufferedOutput;
 use Tests\TestCase;
-use Illuminate\Support\Facades\Artisan;
 
 class ImportIncomesRetryTest extends TestCase
 {

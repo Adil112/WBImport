@@ -42,6 +42,11 @@ class StockNormalizer
 
     public function makeHash(array $normalized): string
     {
-        return $this->makeRecordHash($normalized);
+        return $this->makeRecordHash([
+            'warehouse_name' => $normalized['warehouse_name'] ?? null,
+            'nm_id' => $normalized['nm_id'] ?? null,
+            'barcode' => $normalized['barcode'] ?? null,
+            'tech_size' => $normalized['tech_size'] ?? null,
+        ]);
     }
 }

@@ -14,14 +14,23 @@ abstract class BaseImportCommand extends Command
         parent::__construct();
     }
 
-    protected function runImport(string $importType, string $importName, callable $import, bool $usesDateTo = true): int
+    protected function runImport(string $importType, string $importName, callable $import, bool $usesDateFrom = true, bool $usesDateTo = true): int
     {
-        $accountId = (int)$this->argument('account_id');
-        $dateFrom = (string)$this->argument('dateFrom');
-        $dateTo = $usesDateTo ? (string)$this->argument('dateTo') : null;
-        $limit = (int)$this->option('limit');
+        $dateFrom = $usesDateFrom ? $this->argument('dateFrom') : null;
+        $dateTo = $usesDateTo ? $this->argument('dateTo') : null;
+        $dateFrom = is_string($dateFrom) && $dateFrom !== '' ? $dateFrom : null;
+        $dateTo = is_string($dateTo) && $dateTo !== '' ? $dateTo : null;
 
-        $log = $this->importLogger->start($importType, $dateFrom, $dateTo ?? $dateFrom,);
+        $accountId = (int)$this->argument('account_id');
+        $limit = (int)$this->option('limit');
+        if ($limit < 1 || $limit > 500) {
+            $this->error('Параметр --limit должен находиться в диапазоне от 1 до 500.');
+            return self::FAILURE;
+        }
+
+        $logDateFrom = $dateFrom ?? now()->toDateString();
+        $logDateTo = $dateTo ?? $logDateFrom;
+        $log = $this->importLogger->start($importType, $logDateFrom, $logDateTo);
 
         try {
             $account = Account::findOrFail($accountId);
@@ -32,6 +41,8 @@ abstract class BaseImportCommand extends Command
                 dateFrom: $dateFrom,
                 dateTo: $dateTo,
                 limit: $limit,
+                usesDateFrom: $usesDateFrom,
+                usesDateTo: $usesDateTo,
             );
 
             $result = $import($account, $dateFrom, $dateTo, $limit, $this->createImportEventHandler());
@@ -48,7 +59,7 @@ abstract class BaseImportCommand extends Command
         }
     }
 
-    private function displayStartInformation(Account $account, string $importName, string  $dateFrom, ?string $dateTo, int $limit,): void
+    private function displayStartInformation(Account $account, string $importName, ?string  $dateFrom, ?string $dateTo, int $limit, bool $usesDateFrom, bool $usesDateTo): void
     {
         $this->newLine();
         $this->info("Запущен импорт: {$importName}");
@@ -56,8 +67,12 @@ abstract class BaseImportCommand extends Command
             ['Параметр', 'Значение'],
             [
                 ['Аккаунт', "{$account->name} (ID: {$account->id})"],
-                ['Дата начала', $dateFrom],
-                ['Дата окончания', $dateTo ?? 'не используется'],
+                [
+                    'Дата начала', $usesDateFrom ? ($dateFrom ?? 'определяется автоматически') : 'сегодня',
+                ],
+                [
+                    'Дата окончания', $usesDateTo ? ($dateTo ?? 'сегодня') : 'не используется',
+                ],
                 ['Лимит запроса', $limit],
             ],
         );
@@ -74,6 +89,8 @@ abstract class BaseImportCommand extends Command
                 ['Создано', $result['created']],
                 ['Обновлено', $result['updated']],
                 ['Без изменений', $result['unchanged']],
+                ['Пропущено', $result['skipped']],
+                ['Удалено неактуальных', $result['deleted'] ?? 0],
                 ['Последняя страница', $result['last_page']],
             ],
         );
@@ -85,6 +102,7 @@ abstract class BaseImportCommand extends Command
             $type = $event['type'] ?? null;
 
             match ($type) {
+                'date_range_resolved' => $this->displayResolvedDateRange($event),
                 'page_started' => $this->displayPageStarted($event),
                 'page_received' => $this->displayPageReceived($event),
                 'page_processed' => $this->displayPageProcessed($event),
@@ -134,6 +152,33 @@ abstract class BaseImportCommand extends Command
             "Endpoint: {$event['endpoint']}; "
             . "аккаунт ID: {$event['account_id']}; "
             . "токен ID: {$event['token_id']}."
+        );
+    }
+
+    private function displayResolvedDateRange(array $event): void
+    {
+        $this->newLine();
+        $this->info('Определён фактический период импорта.');
+
+        $this->table(
+            ['Параметр', 'Значение'],
+            [
+                [
+                    'Переданная дата начала', $event['requested_date_from'] ?? 'не передана',
+                ],
+                [
+                    'Переданная дата окончания', $event['requested_date_to'] ?? 'не передана',
+                ],
+                [
+                    'Последняя дата в БД', $event['last_stored_date'] ?? 'данных ещё нет',
+                ],
+                [
+                    'Фактическая дата начала', $event['date_from'],
+                ],
+                [
+                    'Фактическая дата окончания', $event['date_to'],
+                ],
+            ],
         );
     }
 }
